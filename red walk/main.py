@@ -1,6 +1,9 @@
+import os
+os.system('pip install pygame')
 import pygame
 import random
 import math
+import colorsys
 
 # Initialize Pygame
 pygame.init()
@@ -24,27 +27,43 @@ footstep_sounds = [
     pygame.mixer.Sound('footstep6.wav')
 ]
 
-spooky_sounds = [
-    pygame.mixer.Sound('summoning.wav')
-    ]
-
 # Define a short pause between footsteps in milliseconds
-footstep_pause = 300
+footstep_pause = 600
 last_footstep_time = 0
+last_played_footstep = footstep_sounds[0]
 
 # Timer for wall changes
-wall_change_interval = 10000  # 10 seconds
+wall_change_interval = 1000  # 1 seconds
 last_wall_change_time = 0
 
 # Radius around the player for wall changes (in cells)
-wall_change_radius = 5
+wall_change_radius = 10
+
+
+def shift_hue(r, g, b, shift_amount):
+    # Convert RGB to HSV
+    r, g, b = [x / 255.0 for x in (r, g, b)]
+    h, s, v = colorsys.rgb_to_hsv(r, g, b)
+
+    # Shift the hue
+    h = (h + shift_amount) % 1.0
+
+    # Convert back to RGB
+    r, g, b = colorsys.hsv_to_rgb(h, s, v)
+    r, g, b = [int(x * 255) for x in (r, g, b)]
+
+    return r, g, b
 
 def play_footstep_sound():
     global last_footstep_time
+    global last_played_footstep
     current_time = pygame.time.get_ticks()
     if current_time - last_footstep_time >= footstep_pause:
         sound = random.choice(footstep_sounds)
+        while sound == last_played_footstep:
+            sound = random.choice(footstep_sounds)
         sound.play()
+        last_played_footstep = sound
         last_footstep_time = current_time
 
 # Maze settings
@@ -60,7 +79,7 @@ def generate_maze_section(offset_x, offset_y):
     while stack:
         current_x, current_y = stack[-1]
         neighbors = []
-        
+
         if current_x > 1 and section[current_y][current_x - 2] == 1:
             neighbors.append((current_x - 2, current_y))
         if current_x < maze_width - 2 and section[current_y][current_x + 2] == 1:
@@ -154,6 +173,7 @@ def cast_rays():
                 pygame.draw.rect(screen, color, (ray * (screen_width // num_rays), (screen_height // 2) - wall_height // 2, screen_width // num_rays, wall_height))
                 break
 
+
 def randomly_update_walls():
     current_time = pygame.time.get_ticks()
     global last_wall_change_time
@@ -168,24 +188,18 @@ def randomly_update_walls():
                 set_cell(x, y, 0)
                 break
         # Randomly add a wall near the player
-        while True:
-            x = random.randint(player_cell_x - wall_change_radius, player_cell_x + wall_change_radius)
-            y = random.randint(player_cell_y - wall_change_radius, player_cell_y + wall_change_radius)
-            if get_cell(x, y) == 0:  # Now corners can also be changed
-                set_cell(x, y, 1)
-                break
         last_wall_change_time = current_time
 
 # Player settings
 player_pos = find_empty_cell()
 player_angle = 0
-player_speed = 1  # Halved player speed
+player_speed = 0.5  # Halved player speed
 player_rotation_speed = 0.1
-field_of_view = math.pi / 3
+field_of_view = (math.pi / 3) * 2
 half_fov = field_of_view / 2
-num_rays = 120
+num_rays = 360
 max_depth = 300
-
+r,g,b = 255,0,0
 # Game loop
 running = True
 while running:
@@ -195,12 +209,16 @@ while running:
         elif event.type == pygame.VIDEORESIZE:
             screen = pygame.display.set_mode((event.w, event.h), pygame.RESIZABLE)
 
+    shift_amount = 0.2 / 255
+    r, g, b = shift_hue(r, g, b, shift_amount)
+    WALL_COLOR = r, g, b
+
     handle_input()
     screen.fill(BLACK)  # Clear screen
 
     randomly_update_walls()
     cast_rays()
-    
+
     pygame.display.flip()  # Update display
     clock.tick(60)  # Maintain 60 FPS
 
